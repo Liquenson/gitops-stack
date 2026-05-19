@@ -1,1 +1,3 @@
 minikube-linux-amd64
+tests/aws/
+tests/awscliv2.zip
