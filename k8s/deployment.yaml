@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: pipeline-demo
-        image: liquensonruben/pipeline-demo:latest
+        image: 538079272432.dkr.ecr.eu-west-1.amazonaws.com/gitops-stack:7
         ports:
         - containerPort: 5000
         livenessProbe:
