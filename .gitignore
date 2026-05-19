@@ -1,3 +1,5 @@
 minikube-linux-amd64
 tests/aws/
 tests/awscliv2.zip
+terraform/.terraform/
+terraform/.terraform.lock.hcl
