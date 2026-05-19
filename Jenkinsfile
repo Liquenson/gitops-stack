@@ -12,7 +12,7 @@ pipeline {
         stage('Test') {
             steps {
                 echo 'Ejecutando tests...'
-                sh 'pip install -r app/requirements.txt'
+                sh 'pip install -r app/requirements.txt --break-system-packages'
                 sh 'pytest tests/'
             }
         }
