@@ -35,6 +35,7 @@ locals {
 resource "aws_iam_user" "devops" {
   for_each = toset(local.devops_users)
   name     = each.value
+  force_destroy = true
   tags = {
     team    = "devops"
     project = "gitops-stack"
@@ -45,6 +46,7 @@ resource "aws_iam_user" "devops" {
 resource "aws_iam_user" "developers" {
   for_each = toset(local.developer_users)
   name     = each.value
+  force_destroy = true
   tags = {
     team    = "developers"
     project = "gitops-stack"
@@ -55,6 +57,7 @@ resource "aws_iam_user" "developers" {
 resource "aws_iam_user" "security" {
   for_each = toset(local.security_users)
   name     = each.value
+  force_destroy = true
   tags = {
     team    = "security"
     project = "gitops-stack"
@@ -65,6 +68,7 @@ resource "aws_iam_user" "security" {
 resource "aws_iam_user" "monitoring" {
   for_each = toset(local.monitoring_users)
   name     = each.value
+  force_destroy = true
   tags = {
     team    = "monitoring"
     project = "gitops-stack"
@@ -75,6 +79,7 @@ resource "aws_iam_user" "monitoring" {
 resource "aws_iam_user" "data" {
   for_each = toset(local.data_users)
   name     = each.value
+  force_destroy = true
   tags = {
     team    = "data"
     project = "gitops-stack"
