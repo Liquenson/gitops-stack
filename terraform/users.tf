@@ -3,27 +3,28 @@ locals {
     "dev-kevin",
     "dev-wesley",
     "dev-ruben",
-    "dev-pelegrino"
+    "dev-pelegrino",
+    "dev-aisa",
+    "dev-ismael",
+    "dev-fermme",
+    "liquenson-cli"
   ]
-
   developer_users = [
-    "dev-sarah",
+    "dev-yolanda",
     "dev-marcus",
-    "dev-elena"
+    "dev-elena",
+    "dev-william"
   ]
-
   security_users = [
     "sec-maria",
     "sec-john",
     "sec-anna"
   ]
-
   monitoring_users = [
     "ops-pedro",
     "ops-sofia",
     "ops-james"
   ]
-
   data_users = [
     "data-luis",
     "data-nina",
@@ -80,23 +81,20 @@ resource "aws_iam_user" "data" {
     project = "gitops-stack"
   }
 }
+
 # Grupos IAM
 resource "aws_iam_group" "devops" {
   name = "devops-team"
 }
-
 resource "aws_iam_group" "developers" {
   name = "developers"
 }
-
 resource "aws_iam_group" "security" {
   name = "security-team"
 }
-
 resource "aws_iam_group" "monitoring" {
   name = "monitoring-team"
 }
-
 resource "aws_iam_group" "data" {
   name = "data-team"
 }
@@ -108,28 +106,24 @@ resource "aws_iam_group_membership" "devops" {
   users = local.devops_users
   depends_on = [aws_iam_user.devops]
 }
-
 resource "aws_iam_group_membership" "developers" {
   name  = "developers-membership"
   group = aws_iam_group.developers.name
   users = local.developer_users
   depends_on = [aws_iam_user.developers]
 }
-
 resource "aws_iam_group_membership" "security" {
   name  = "security-team-membership"
   group = aws_iam_group.security.name
   users = local.security_users
   depends_on = [aws_iam_user.security]
 }
-
 resource "aws_iam_group_membership" "monitoring" {
   name  = "monitoring-team-membership"
   group = aws_iam_group.monitoring.name
   users = local.monitoring_users
   depends_on = [aws_iam_user.monitoring]
 }
-
 resource "aws_iam_group_membership" "data" {
   name  = "data-team-membership"
   group = aws_iam_group.data.name
