@@ -1,0 +1,45 @@
+---
+# Playbook principal — gitops-stack
+# Ejecuta: ansible-playbook ansible/site.yml
+
+- name: Configuración base de todos los nodos
+  hosts: eks_nodes
+  become: yes
+  roles:
+    - common
+
+- name: Hardening de seguridad
+  hosts: eks_nodes
+  become: yes
+  roles:
+    - security
+
+- name: Configuración de monitorización
+  hosts: eks_nodes
+  become: yes
+  roles:
+    - monitoring
+
+- name: Verificación final
+  hosts: eks_nodes
+  become: yes
+  tasks:
+    - name: Verificar que el sistema está listo
+      ansible.builtin.debug:
+        msg: "Nodo {{ inventory_hostname }} configurado correctamente en {{ environment }}"
+
+    - name: Recopilar información del sistema
+      ansible.builtin.setup:
+        gather_subset:
+          - hardware
+          - network
+      register: system_info
+
+    - name: Mostrar información del nodo
+      ansible.builtin.debug:
+        msg:
+          - "Hostname: {{ ansible_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "CPU: {{ ansible_processor_vcpus }} vCPUs"
+          - "RAM: {{ ansible_memtotal_mb }} MB"
+          - "IP: {{ ansible_default_ipv4.address }}"

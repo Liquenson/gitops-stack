@@ -1,0 +1,50 @@
+---
+# Actualizar sistema
+- name: Actualizar paquetes del sistema
+  ansible.builtin.package:
+    name: "*"
+    state: latest
+  tags: update
+
+# Instalar paquetes base
+- name: Instalar paquetes base
+  ansible.builtin.package:
+    name: "{{ base_packages }}"
+    state: present
+  tags: packages
+
+# Configurar timezone
+- name: Configurar timezone a Europe/Madrid
+  community.general.timezone:
+    name: Europe/Madrid
+  tags: timezone
+
+# Crear usuario de deploy
+- name: Crear usuario deploy
+  ansible.builtin.user:
+    name: deploy
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    create_home: yes
+  tags: users
+
+# Configurar límites del sistema
+- name: Configurar límites de archivos abiertos
+  ansible.builtin.pam_limits:
+    domain: "*"
+    limit_type: "-"
+    limit_item: nofile
+    value: "65536"
+  tags: limits
+
+# Verificar espacio en disco
+- name: Verificar espacio en disco disponible
+  ansible.builtin.shell: df -h /
+  register: disk_space
+  tags: check
+
+- name: Mostrar espacio en disco
+  ansible.builtin.debug:
+    msg: "{{ disk_space.stdout }}"
+  tags: check

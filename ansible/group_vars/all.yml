@@ -1,0 +1,25 @@
+# Variables globales del proyecto
+project_name: gitops-stack
+environment: production
+aws_region: eu-west-1
+
+# Paquetes base a instalar en todos los servidores
+base_packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - net-tools
+  - unzip
+  - python3
+  - python3-pip
+
+# Configuración SSH
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+
+# CloudWatch
+cloudwatch_log_group: /gitops-stack/nodes
+cloudwatch_retention_days: 30

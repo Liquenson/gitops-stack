@@ -57,6 +57,37 @@ pipeline {
                 }
             }
         }
+
+        stage('Configurar nodos con Ansible') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials'
+                ]]) {
+                    echo 'Configurando nodos con Ansible...'
+                    sh """
+                        export NODE1_IP=\$(aws ec2 describe-instances \
+                            --region ${AWS_REGION} \
+                            --filters "Name=tag:eks:cluster-name,Values=gitops-stack-prod" \
+                            --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+                            --output text)
+
+                        export NODE2_IP=\$(aws ec2 describe-instances \
+                            --region ${AWS_REGION} \
+                            --filters "Name=tag:eks:cluster-name,Values=gitops-stack-prod" \
+                            --query 'Reservations[1].Instances[0].PrivateIpAddress' \
+                            --output text)
+
+                        echo "Nodo 1: \$NODE1_IP"
+                        echo "Nodo 2: \$NODE2_IP"
+
+                        cd ansible
+                        ansible-playbook site.yml \
+                            --extra-vars "node1_ip=\$NODE1_IP node2_ip=\$NODE2_IP"
+                    """
+                }
+            }
+        }
         
         stage('Actualizar Kubernetes') {
             steps {

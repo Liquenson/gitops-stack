@@ -1,0 +1,84 @@
+---
+# Configurar SSH seguro
+- name: Configurar SSH — deshabilitar root login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^PermitRootLogin"
+    line: "PermitRootLogin {{ ssh_permit_root_login }}"
+    state: present
+  notify: restart sshd
+  tags: ssh
+
+- name: Configurar SSH — deshabilitar autenticación por contraseña
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^PasswordAuthentication"
+    line: "PasswordAuthentication {{ ssh_password_authentication }}"
+    state: present
+  notify: restart sshd
+  tags: ssh
+
+- name: Configurar SSH — cambiar puerto
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^Port"
+    line: "Port {{ ssh_port }}"
+    state: present
+  notify: restart sshd
+  tags: ssh
+
+# Configurar firewall
+- name: Instalar UFW
+  ansible.builtin.package:
+    name: ufw
+    state: present
+  tags: firewall
+
+- name: Denegar todo el tráfico entrante por defecto
+  community.general.ufw:
+    default: deny
+    direction: incoming
+  tags: firewall
+
+- name: Permitir tráfico SSH
+  community.general.ufw:
+    rule: allow
+    port: "{{ ssh_port }}"
+    proto: tcp
+  tags: firewall
+
+- name: Permitir tráfico Kubernetes API
+  community.general.ufw:
+    rule: allow
+    port: "6443"
+    proto: tcp
+  tags: firewall
+
+- name: Activar UFW
+  community.general.ufw:
+    state: enabled
+  tags: firewall
+
+# Deshabilitar servicios innecesarios
+- name: Deshabilitar servicio telnet si existe
+  ansible.builtin.service:
+    name: telnet
+    state: stopped
+    enabled: no
+  ignore_errors: yes
+  tags: services
+
+# Actualizar paquetes de seguridad
+- name: Instalar actualizaciones de seguridad
+  ansible.builtin.package:
+    name: unattended-upgrades
+    state: present
+  tags: updates
+
+- name: Activar actualizaciones automáticas de seguridad
+  ansible.builtin.service:
+    name: unattended-upgrades
+    state: started
+    enabled: yes
+  ignore_errors: yes
+  tags: updates
