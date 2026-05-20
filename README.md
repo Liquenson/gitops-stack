@@ -4,16 +4,17 @@
 ![Docker](https://img.shields.io/badge/Docker-29.x-2496ED?logo=docker)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-1.35-326CE5?logo=kubernetes)
 ![Terraform](https://img.shields.io/badge/Terraform-1.9-7B42BC?logo=terraform)
+![Ansible](https://img.shields.io/badge/Ansible-2.10-EE0000?logo=ansible)
 ![Jenkins](https://img.shields.io/badge/Jenkins-2.555-D24939?logo=jenkins)
 ![AWS](https://img.shields.io/badge/AWS-EKS-FF9900?logo=amazonaws)
 ![ArgoCD](https://img.shields.io/badge/ArgoCD-3.4-EF7B4D?logo=argo)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-Pipeline GitOps de nivel productivo desplegado en **AWS EKS** — construido sobre Docker, Kubernetes, Jenkins, Terraform, ArgoCD y Prometheus. Incluye gestión de identidades IAM, auditoría con CloudTrail y monitorización con CloudWatch.
+Pipeline GitOps de nivel productivo desplegado en **AWS EKS** — construido sobre Docker, Kubernetes, Jenkins, Terraform, Ansible, ArgoCD y Prometheus. Incluye gestión de identidades IAM, auditoría con CloudTrail, monitorización con CloudWatch y configuración automática de nodos con Ansible.
 
 ## Descripción
 
-Plataforma de entrega continua que automatiza el ciclo de vida completo del software — desde el commit hasta el despliegue en producción en AWS — siguiendo el patrón GitOps. Git actúa como única fuente de verdad para el código, la infraestructura y la gestión de accesos.
+Plataforma de entrega continua que automatiza el ciclo de vida completo del software — desde el commit hasta el despliegue en producción en AWS — siguiendo el patrón GitOps. Git actúa como única fuente de verdad para el código, la infraestructura, la configuración y la gestión de accesos.
 
 ## Arquitectura
 
@@ -24,13 +25,17 @@ Jenkins (CI/CD on-premise)
   ├── Ejecuta tests automáticos (pytest)
   ├── Construye imagen Docker
   ├── Publica imagen en AWS ECR (registry privado)
-  ├── Ejecuta Terraform plan
-  ├── Aprobación manual antes de aplicar
-  └── Terraform apply → infraestructura en AWS
+  ├── Ejecuta Terraform plan + aprobación manual
+  ├── Terraform apply → infraestructura en AWS
+  ├── Ansible → configura nodos automáticamente
+  │     ├── common: paquetes base + timezone + usuarios
+  │     ├── security: hardening SSH + firewall UFW
+  │     └── monitoring: agente CloudWatch
+  └── kubectl → despliega app en EKS
           ↓
 AWS EKS (Kubernetes gestionado)
   ├── VPC con subredes públicas y privadas (2 AZs)
-  ├── 2 nodos worker t3.small
+  ├── 2 nodos worker t3.small configurados con Ansible
   ├── 2 réplicas con balanceo de carga
   ├── Load Balancer real expuesto a internet
   ├── Self-healing mediante liveness probes
@@ -57,6 +62,7 @@ Observabilidad
 | Registry de imágenes | Docker Hub | AWS ECR (privado) |
 | Pipeline CI/CD | GitHub Actions | Jenkins (on-premise) |
 | Infraestructura como código | — | Terraform |
+| Configuración de nodos | — | Ansible |
 | Orquestación local | Minikube | AWS EKS |
 | CD / GitOps | ArgoCD | ArgoCD |
 | Monitorización | Prometheus + Grafana | CloudWatch + Grafana |
@@ -69,23 +75,35 @@ Observabilidad
 ```
 gitops-stack/
 ├── app/
-│   ├── app.py              # API REST con Flask
-│   └── requirements.txt    # Dependencias Python
+│   ├── app.py                    # API REST con Flask
+│   └── requirements.txt          # Dependencias Python
 ├── tests/
-│   └── test_app.py         # Tests automatizados (pytest)
+│   └── test_app.py               # Tests automatizados (pytest)
 ├── k8s/
-│   ├── deployment.yaml     # Deployment Kubernetes (2 réplicas)
-│   └── service.yaml        # Service Kubernetes (LoadBalancer)
+│   ├── deployment.yaml           # Deployment Kubernetes (2 réplicas)
+│   └── service.yaml              # Service Kubernetes (LoadBalancer)
 ├── terraform/
-│   ├── main.tf             # VPC + EKS en AWS
-│   ├── variables.tf        # Parámetros configurables por entorno
-│   ├── outputs.tf          # Endpoints y comandos de conexión
-│   └── users.tf            # Gestión de usuarios y grupos IAM
+│   ├── main.tf                   # VPC + EKS en AWS
+│   ├── variables.tf              # Parámetros configurables por entorno
+│   ├── outputs.tf                # Endpoints y comandos de conexión
+│   └── users.tf                  # Gestión de usuarios y grupos IAM
+├── ansible/
+│   ├── ansible.cfg               # Configuración global de Ansible
+│   ├── inventory.yml             # Inventario de servidores
+│   ├── site.yml                  # Playbook principal
+│   ├── group_vars/
+│   │   └── all.yml               # Variables globales compartidas
+│   └── roles/
+│       ├── common/               # Configuración base del sistema
+│       ├── security/             # Hardening de seguridad
+│       └── monitoring/           # Agente CloudWatch
+├── scripts/
+│   └── pre-destroy.sh            # Script de limpieza antes del destroy
 ├── .github/
 │   └── workflows/
-│       └── ci-cd.yml       # Pipeline GitHub Actions (desarrollo)
-├── Jenkinsfile             # Pipeline Jenkins para producción
-└── Dockerfile              # Imagen optimizada por capas
+│       └── ci-cd.yml             # Pipeline GitHub Actions (desarrollo)
+├── Jenkinsfile                   # Pipeline Jenkins para producción
+└── Dockerfile                    # Imagen optimizada por capas
 ```
 
 ## Pipeline CI/CD con Jenkins
@@ -95,12 +113,32 @@ Cada push a `main` dispara el pipeline automáticamente:
 1. **Test** — Ejecución de tests con pytest. Si fallan, el pipeline se detiene.
 2. **Build** — Construcción de imagen Docker con caché de capas optimizado.
 3. **Push a ECR** — Publicación en registry privado AWS con tag único por build number.
-4. **Terraform Plan** — Planificación de cambios. Muestra exactamente qué se va a crear o modificar.
-5. **Aprobación manual** — Un ingeniero revisa el plan y aprueba antes de aplicar en producción.
-6. **Terraform Apply** — Creación o actualización de infraestructura en AWS.
-7. **Deploy en EKS** — Actualización del Deployment con la nueva imagen. Rolling update sin downtime.
+4. **Terraform Plan** — Planificación de cambios con aprobación manual antes de aplicar.
+5. **Terraform Apply** — Creación o actualización de infraestructura en AWS.
+6. **Ansible** — Configuración automática de los nodos EC2 recién creados.
+7. **Deploy en EKS** — Actualización del Deployment con rolling update sin downtime.
 
 > Nunca se despliega código roto. Nunca se modifica infraestructura sin aprobación humana.
+
+## Configuración de nodos con Ansible
+
+Ansible configura automáticamente cada nodo EC2 después de ser creado por Terraform:
+
+| Rol | Descripción |
+|-----|-------------|
+| `common` | Actualiza paquetes, instala dependencias base, configura timezone Europe/Madrid, crea usuario de deploy, configura límites del sistema |
+| `security` | Hardening SSH (deshabilita root login y autenticación por contraseña), configura firewall UFW, activa actualizaciones automáticas de seguridad |
+| `monitoring` | Instala y configura agente CloudWatch para métricas de CPU, memoria y disco, centraliza logs en CloudWatch Logs |
+
+```bash
+# Ejecutar playbook manualmente
+cd ansible
+ansible-playbook site.yml --extra-vars "node1_ip=X.X.X.X node2_ip=Y.Y.Y.Y"
+
+# Ejecutar solo un rol específico
+ansible-playbook site.yml --tags security
+ansible-playbook site.yml --tags monitoring
+```
 
 ## Infraestructura AWS (Terraform)
 
@@ -126,30 +164,24 @@ Todos los usuarios y grupos se gestionan como código en `terraform/users.tf`:
 
 | Grupo | Permisos | Usuarios |
 |-------|----------|---------|
-| `devops-team` | EKS + ECR + CloudWatch | dev-kevin, dev-wesley, dev-ruben, dev-pelegrino |
-| `developers` | ECR PowerUser + CloudWatch Logs | dev-sarah, dev-marcus, dev-elena |
-| `security-team` | CloudTrail + IAM ReadOnly | sec-maria, sec-john, sec-anna |
+| `devops-team` | EKS + ECR + CloudWatch | dev-kevin, dev-wesley, dev-ruben, dev-pelegrino, dev-aisa, dev-ismael, dev-fermme |
+| `developers` | ECR PowerUser + CloudWatch Logs | dev-yolanda, dev-marcus, dev-elena, dev-william |
+| `security-team` | IAM ReadOnly | sec-maria, sec-john, sec-anna |
 | `monitoring-team` | CloudWatch ReadOnly | ops-pedro, ops-sofia, ops-james |
 | `data-team` | S3 Full + RDS ReadOnly | data-luis, data-nina, data-alex |
 
-Principio aplicado: **mínimo privilegio** — cada grupo tiene exactamente los permisos que necesita.
+Para añadir un usuario — edita `users.tf` y ejecuta `terraform apply`. Para eliminarlo — quítalo de la lista.
 
-## Observabilidad
+## Procedimiento de destroy seguro
 
-**CloudWatch Container Insights** — métricas de CPU, memoria y red de cada pod y nodo en tiempo real.
+```bash
+# Paso 1 — Pre-destroy (elimina Load Balancer de Kubernetes)
+bash scripts/pre-destroy.sh
 
-**CloudWatch Logs** — logs centralizados del clúster EKS: API server, scheduler, controller manager y authenticator. Los logs persisten aunque el pod haya muerto.
-
-**CloudTrail** — auditoría completa de todas las acciones en AWS. Registra quién hizo qué, cuándo y desde dónde. Multi-región, almacenado en S3.
-
-**Prometheus + Grafana** — dashboards de Kubernetes con métricas de pods, nodos y namespaces instalados via Helm.
-
-## Endpoints de la API
-
-| Endpoint | Método | Descripción |
-|----------|--------|-------------|
-| `/` | GET | Devuelve hostname del pod, versión y estado |
-| `/health` | GET | Health check para liveness probe de Kubernetes |
+# Paso 2 — Destruir infraestructura
+cd terraform
+terraform destroy -auto-approve
+```
 
 ## Ejecución en local
 
@@ -190,48 +222,41 @@ terraform init
 terraform plan
 terraform apply
 
+# Configurar nodos con Ansible
+cd ../ansible
+ansible-playbook site.yml
+
 # Conectar kubectl al clúster EKS
 aws eks update-kubeconfig --region eu-west-1 --name gitops-stack-prod
 
 # Verificar clúster
 kubectl get nodes
 kubectl get pods -A
-
-# Activar CloudWatch Container Insights
-aws eks create-addon \
-  --cluster-name gitops-stack-prod \
-  --addon-name amazon-cloudwatch-observability \
-  --region eu-west-1
 ```
+
+## Endpoints de la API
+
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/` | GET | Devuelve hostname del pod, versión y estado |
+| `/health` | GET | Health check para liveness probe de Kubernetes |
 
 ## Principios aplicados
 
-- **GitOps** — Git como única fuente de verdad para código, infraestructura y accesos
+- **GitOps** — Git como única fuente de verdad para código, infraestructura y configuración
 - **Infraestructura inmutable** — Cada cambio genera una nueva imagen, nunca se modifica en caliente
+- **Configuración como código** — Ansible gestiona la configuración de servidores de forma reproducible
 - **Fail fast** — El pipeline se detiene ante cualquier fallo de tests
 - **Aprobación manual** — Ningún cambio de infraestructura se aplica sin revisión humana
 - **Mínimo privilegio** — Roles y grupos IAM con permisos estrictamente necesarios
-- **Caché de capas** — Dockerfile optimizado para minimizar tiempos de build
 - **Alta disponibilidad** — Self-healing, múltiples réplicas, múltiples zonas de disponibilidad
 - **Trazabilidad completa** — Cada despliegue vinculado a un commit, build number y usuario
 - **Registry privado** — Imágenes en ECR, nunca en registries públicos en producción
 - **Auditoría** — CloudTrail registra todas las acciones en AWS con timestamp y usuario
-
-## Lo que demuestra este proyecto
-
-Este proyecto implementa el flujo completo que usa un equipo DevOps en producción real:
-
-- Developer hace push → Jenkins detecta el cambio automáticamente
-- Tests validan el código antes de cualquier despliegue
-- Imagen construida y subida a ECR privado con versionado automático por build number
-- Terraform gestiona infraestructura y usuarios IAM como código con aprobación manual
-- Kubernetes orquesta contenedores con self-healing y rolling updates sin downtime
-- ArgoCD mantiene el estado del clúster sincronizado con Git — GitOps real
-- CloudWatch + Prometheus monitorizan el sistema en tiempo real
-- CloudTrail audita todas las acciones para cumplimiento y seguridad
+- **Hardening automático** — Ansible aplica políticas de seguridad en cada nodo nuevo
 
 ---
 
 Desarrollado por [Liquenson](https://github.com/Liquenson) · Ingeniero DevOps
 
-**Stack:** Docker · Kubernetes · Jenkins · Terraform · AWS EKS · ECR · ArgoCD · Prometheus · Grafana · CloudWatch · CloudTrail · IAM
+**Stack:** Docker · Kubernetes · Jenkins · Terraform · Ansible · AWS EKS · ECR · ArgoCD · Prometheus · Grafana · CloudWatch · CloudTrail · IAM
