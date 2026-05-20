@@ -6,8 +6,7 @@ locals {
     "dev-pelegrino",
     "dev-aisa",
     "dev-ismael",
-    "dev-fermme",
-    "liquenson-cli"
+    "dev-fermme"
   ]
   developer_users = [
     "dev-yolanda",
@@ -129,4 +128,49 @@ resource "aws_iam_group_membership" "data" {
   group = aws_iam_group.data.name
   users = local.data_users
   depends_on = [aws_iam_user.data]
+}
+# Políticas devops-team
+resource "aws_iam_group_policy_attachment" "devops_eks" {
+  group      = aws_iam_group.devops.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+resource "aws_iam_group_policy_attachment" "devops_ecr" {
+  group      = aws_iam_group.devops.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
+}
+resource "aws_iam_group_policy_attachment" "devops_cloudwatch" {
+  group      = aws_iam_group.devops.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
+}
+
+# Políticas developers
+resource "aws_iam_group_policy_attachment" "developers_ecr" {
+  group      = aws_iam_group.developers.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+}
+resource "aws_iam_group_policy_attachment" "developers_logs" {
+  group      = aws_iam_group.developers.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsReadOnlyAccess"
+}
+
+# Políticas security-team
+resource "aws_iam_group_policy_attachment" "security_iam" {
+  group      = aws_iam_group.security.name
+  policy_arn = "arn:aws:iam::aws:policy/IAMReadOnlyAccess"
+}
+
+# Políticas monitoring-team
+resource "aws_iam_group_policy_attachment" "monitoring_cloudwatch" {
+  group      = aws_iam_group.monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
+}
+
+# Políticas data-team
+resource "aws_iam_group_policy_attachment" "data_s3" {
+  group      = aws_iam_group.data.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+resource "aws_iam_group_policy_attachment" "data_rds" {
+  group      = aws_iam_group.data.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess"
 }
