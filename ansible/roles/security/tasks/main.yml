@@ -28,34 +28,30 @@
   tags: ssh
 
 # Configurar firewall
-- name: Instalar UFW
+- name: Instalar firewalld
   ansible.builtin.package:
-    name: ufw
+    name: firewalld
     state: present
   tags: firewall
 
-- name: Denegar todo el tráfico entrante por defecto
-  community.general.ufw:
-    default: deny
-    direction: incoming
+- name: Iniciar y habilitar firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: yes
   tags: firewall
 
 - name: Permitir tráfico SSH
-  community.general.ufw:
-    rule: allow
-    port: "{{ ssh_port }}"
-    proto: tcp
+  ansible.posix.firewalld:
+    service: ssh
+    permanent: yes
+    state: enabled
   tags: firewall
 
 - name: Permitir tráfico Kubernetes API
-  community.general.ufw:
-    rule: allow
-    port: "6443"
-    proto: tcp
-  tags: firewall
-
-- name: Activar UFW
-  community.general.ufw:
+  ansible.posix.firewalld:
+    port: 6443/tcp
+    permanent: yes
     state: enabled
   tags: firewall
 
@@ -68,16 +64,16 @@
   ignore_errors: yes
   tags: services
 
-# Actualizar paquetes de seguridad
-- name: Instalar actualizaciones de seguridad
+# Actualizaciones de seguridad automáticas
+- name: Instalar dnf-automatic para actualizaciones de seguridad
   ansible.builtin.package:
-    name: unattended-upgrades
+    name: dnf-automatic
     state: present
   tags: updates
 
 - name: Activar actualizaciones automáticas de seguridad
   ansible.builtin.service:
-    name: unattended-upgrades
+    name: dnf-automatic.timer
     state: started
     enabled: yes
   ignore_errors: yes
