@@ -8,9 +8,10 @@
   tags: cloudwatch
 
 - name: Instalar agente CloudWatch
-  ansible.builtin.package:
+  ansible.builtin.dnf:
     name: /tmp/amazon-cloudwatch-agent.rpm
     state: present
+    disable_gpg_check: yes
   tags: cloudwatch
 
 # Configurar agente CloudWatch
