@@ -24,7 +24,7 @@
   ansible.builtin.user:
     name: deploy
     shell: /bin/bash
-    groups: sudo
+    groups: wheel
     append: yes
     create_home: yes
   tags: users
