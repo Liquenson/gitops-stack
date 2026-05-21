@@ -65,9 +65,12 @@ module "eks" {
       min_size       = 1
       max_size       = 3
       desired_size   = var.node_count
+
+      iam_role_additional_policies = {
+      ssm = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     }
   }
-
+}
   tags = {
     Project     = "gitops-stack"
     Environment = "production"

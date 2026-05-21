@@ -58,32 +58,39 @@ pipeline {
             }
         }
 
-        stage('Configurar nodos con Ansible') {
+        stage('Configurar nodos con Ansible via SSM') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-credentials'
                 ]]) {
-                    echo 'Configurando nodos con Ansible...'
+                    echo 'Configurando nodos con Ansible via SSM...'
                     sh """
-                        export NODE1_IP=\$(aws ec2 describe-instances \
+                        export NODE1_ID=\$(aws ec2 describe-instances \
                             --region ${AWS_REGION} \
-                            --filters "Name=tag:eks:cluster-name,Values=gitops-stack-prod" \
-                            --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+                            --filters \
+                              "Name=tag:eks:cluster-name,Values=gitops-stack-prod" \
+                              "Name=instance-state-name,Values=running" \
+                            --query 'Reservations[0].Instances[0].InstanceId' \
                             --output text)
 
-                        export NODE2_IP=\$(aws ec2 describe-instances \
+                        export NODE2_ID=\$(aws ec2 describe-instances \
                             --region ${AWS_REGION} \
-                            --filters "Name=tag:eks:cluster-name,Values=gitops-stack-prod" \
-                            --query 'Reservations[1].Instances[0].PrivateIpAddress' \
+                            --filters \
+                              "Name=tag:eks:cluster-name,Values=gitops-stack-prod" \
+                              "Name=instance-state-name,Values=running" \
+                            --query 'Reservations[1].Instances[0].InstanceId' \
                             --output text)
 
-                        echo "Nodo 1: \$NODE1_IP"
-                        echo "Nodo 2: \$NODE2_IP"
+                        echo "Nodo 1 ID: \$NODE1_ID"
+                        echo "Nodo 2 ID: \$NODE2_ID"
+
+                        pip install ansible-ssm --break-system-packages || true
 
                         cd ansible
                         ansible-playbook site.yml \
-                            --extra-vars "node1_ip=\$NODE1_IP node2_ip=\$NODE2_IP"
+                            -e NODE1_ID=\$NODE1_ID \
+                            -e NODE2_ID=\$NODE2_ID
                     """
                 }
             }
