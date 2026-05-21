@@ -1,6 +1,6 @@
 # Variables globales del proyecto
 project_name: gitops-stack
-environment: production
+deploy_environment: production
 aws_region: eu-west-1
 
 # Paquetes base a instalar en todos los servidores

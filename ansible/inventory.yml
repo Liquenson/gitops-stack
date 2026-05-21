@@ -7,7 +7,8 @@ all:
         node2:
           ansible_host: "{{ lookup('env', 'NODE2_ID') }}"
       vars:
-        ansible_connection: aws_ssm
+        ansible_connection: community.aws.aws_ssm
         ansible_aws_ssm_region: eu-west-1
         ansible_aws_ssm_bucket_name: devops-lab-tfstate-538079272432
+        ansible_aws_ssm_s3_addressing_style: virtual
         ansible_python_interpreter: /usr/bin/python3
