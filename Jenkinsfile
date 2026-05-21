@@ -105,8 +105,10 @@ pipeline {
                     echo 'Conectando a EKS y desplegando...'
                     sh """
                         aws eks update-kubeconfig --region ${AWS_REGION} --name gitops-stack-prod
-                        kubectl set image deployment/pipeline-demo \
-                        pipeline-demo=${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        kubectl apply -f k8s/deployment.yaml
+                        kubectl apply -f k8s/service.yaml
+                        kubectl set image deployment/pipeline-demo pipeline-demo=${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        kubectl rollout status deployment/pipeline-demo --timeout=120s
                     """
                 }
             }
