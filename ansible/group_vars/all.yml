@@ -5,7 +5,6 @@ aws_region: eu-west-1
 
 # Paquetes base a instalar en todos los servidores
 base_packages:
-  - curl
   - wget
   - git
   - vim
