@@ -3,6 +3,7 @@ pipeline {
     
     environment {
         AWS_REGION = 'eu-west-1'
+        AWS_ACCOUNT_ID = '538079272432'
         ECR_REGISTRY = '538079272432.dkr.ecr.eu-west-1.amazonaws.com'
         IMAGE_NAME = 'gitops-stack'
         IMAGE_TAG = "${BUILD_NUMBER}"
@@ -104,6 +105,17 @@ pipeline {
                 ]]) {
                     echo 'Conectando a EKS y desplegando...'
                     sh """
+                        # Asumir el rol de admin EKS
+                        CREDS=\$(aws sts assume-role \
+                            --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/eks-admin-role \
+                            --role-session-name jenkins-deploy-${BUILD_NUMBER} \
+                            --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+                            --output text)
+
+                        export AWS_ACCESS_KEY_ID=\$(echo \$CREDS | awk '{print \$1}')
+                        export AWS_SECRET_ACCESS_KEY=\$(echo \$CREDS | awk '{print \$2}')
+                        export AWS_SESSION_TOKEN=\$(echo \$CREDS | awk '{print \$3}')
+
                         aws eks update-kubeconfig --region ${AWS_REGION} --name gitops-stack-prod
                         kubectl apply -f k8s/deployment.yaml
                         kubectl apply -f k8s/service.yaml
