@@ -27,3 +27,15 @@ variable "node_count" {
   type        = number
   default     = 2
 }
+
+variable "aws_account_id" {
+  description = "AWS Account ID"
+  type        = string
+  default     = "538079272432"
+}
+
+variable "eks_admin_user" {
+  description = "Usuario IAM con acceso admin al cluster EKS"
+  type        = string
+  default     = "liquenson-cli"
+}
