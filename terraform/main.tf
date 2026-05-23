@@ -108,6 +108,23 @@ resource "aws_iam_role_policy_attachment" "eks_admin_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
+resource "aws_iam_policy" "eks_describe" {
+  name = "eks-admin-describe-policy"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["eks:DescribeCluster", "eks:ListClusters"]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_describe_policy" {
+  role       = aws_iam_role.eks_admin.name
+  policy_arn = aws_iam_policy.eks_describe.arn
+}
+
 resource "aws_eks_access_entry" "admin" {
   cluster_name  = module.eks.cluster_name
   principal_arn = aws_iam_role.eks_admin.arn
