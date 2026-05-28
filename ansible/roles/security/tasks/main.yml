@@ -41,10 +41,19 @@
     enabled: yes
   tags: firewall
 
+- name: Permitir tráfico HTTPS para SSM
+  ansible.posix.firewalld:
+    service: https
+    permanent: yes
+    immediate: yes
+    state: enabled
+  tags: firewall
+
 - name: Permitir tráfico SSH
   ansible.posix.firewalld:
     service: ssh
     permanent: yes
+    immediate: yes
     state: enabled
   tags: firewall
 
@@ -52,6 +61,7 @@
   ansible.posix.firewalld:
     port: 6443/tcp
     permanent: yes
+    immediate: yes
     state: enabled
   tags: firewall
 
