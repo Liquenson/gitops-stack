@@ -1,279 +1,216 @@
 # gitops-stack
 
-![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
-![Docker](https://img.shields.io/badge/Docker-29.x-2496ED?logo=docker)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-1.35-326CE5?logo=kubernetes)
-![Terraform](https://img.shields.io/badge/Terraform-1.9-7B42BC?logo=terraform)
-![Ansible](https://img.shields.io/badge/Ansible-2.10-EE0000?logo=ansible)
-![Jenkins](https://img.shields.io/badge/Jenkins-2.555-D24939?logo=jenkins)
-![AWS EKS](https://img.shields.io/badge/AWS-EKS-FF9900?logo=amazonaws)
-![License](https://img.shields.io/badge/License-MIT-green)
+Pipeline GitOps de nivel productivo sobre AWS EKS. Automatiza el ciclo de vida completo del software — desde el commit hasta el despliegue en Kubernetes. Git es la única fuente de verdad para código, infraestructura, configuración y accesos.
 
-> Pipeline GitOps de nivel productivo sobre **AWS EKS** — infraestructura como código, CI/CD automatizado, configuración sin SSH y acceso al cluster mediante roles IAM asumibles. Sin intervención manual. Sin bastiones. Sin secretos hardcodeados.
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://python.org)
+[![Terraform](https://img.shields.io/badge/Terraform-1.9-7B42BC?logo=terraform&logoColor=white)](https://terraform.io)
+[![Jenkins](https://img.shields.io/badge/Jenkins-2.555-D24939?logo=jenkins&logoColor=white)](https://jenkins.io)
+[![AWS EKS](https://img.shields.io/badge/AWS-EKS-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com/eks)
+[![License](https://img.shields.io/badge/License-MIT-22C55E)](LICENSE)
 
 ---
 
-## ¿Qué es y qué resuelve?
-
-**gitops-stack** es una plataforma de entrega continua que automatiza el ciclo de vida completo del software en AWS — desde el commit hasta el despliegue en producción — siguiendo el patrón GitOps.
-
-**Resuelve tres problemas reales de equipos DevOps:**
+## Overview
 
 | Problema | Solución |
-|----------|----------|
-| Despliegues manuales propensos a errores | Pipeline CI/CD end-to-end con Jenkins, 7 stages automatizados |
-| Acceso inseguro al cluster EKS (usuarios directos, SSH) | IAM Role asumible + Ansible via AWS SSM — cero credenciales estáticas |
-| Infraestructura no reproducible | Terraform modular con backend S3 — `terraform apply` recrea todo desde cero |
-
-**Git actúa como única fuente de verdad** para código, infraestructura, configuración y accesos. Ningún cambio llega a producción sin pasar por Pull Request, tests y aprobación humana.
+|---|---|
+| Despliegues manuales propensos a error | Pipeline Jenkins de 7 stages — 100% automatizado |
+| Acceso inseguro al cluster EKS | IAM Role asumible + `sts:AssumeRole` — cero credenciales estáticas |
+| Infraestructura no reproducible | Terraform modular con backend S3 — `apply` recrea todo desde cero |
+| Configuración manual de servidores | Ansible via AWS SSM — sin SSH, sin bastión, sin IP pública |
 
 ---
 
-## Arquitectura
+## Architecture
 
 ```
-Developer → git push → Pull Request → merge a main
-                                           ↓
-                                    Jenkins Pipeline
-                          ┌────────────────────────────────┐
-                          │  1. pytest (fail fast)          │
-                          │  2. docker build + push ECR     │
-                          │  3. terraform plan + apply      │
-                          │     ├─ VPC + EKS + KMS          │
-                          │     ├─ IAM Role eks-admin-role  │
-                          │     └─ EKS Access Entries       │
-                          │  4. Ansible via AWS SSM         │
-                          │     ├─ common: base + timezone  │
-                          │     ├─ security: firewalld SSH  │
-                          │     └─ monitoring: CloudWatch   │
-                          │  5. sts:AssumeRole → kubectl    │
-                          │     └─ rolling update sin downtime│
-                          └────────────────────────────────┘
-                                           ↓
-                              AWS EKS — gitops-stack-prod
-                          ┌────────────────────────────────┐
-                          │  2 nodos t3.small (2 AZs)      │
-                          │  2 réplicas — self-healing      │
-                          │  Subredes privadas — sin IP     │
-                          └────────────────────────────────┘
+git push → PR → merge main
+                    │
+             Jenkins Pipeline                    AWS
+             ────────────────         ┌──────────────────────┐
+             1. pytest               │  VPC 10.0.0.0/16      │
+             2. docker build         │  ├─ private subnets   │
+             3. push ECR             │  │   worker-node ×2   │
+             4. terraform apply  ──► │  └─ public subnets    │
+             5. ansible SSM          │      NAT Gateway       │
+             6. kubectl rollout      │                        │
+             ────────────────        │  EKS gitops-stack-prod │
+                    │                │  2 réplicas · multi-AZ │
+                    └──────────────► │  self-healing · TLS    │
+                                     └──────────────────────┘
 ```
 
 ---
 
-## Stack tecnológico
+## Stack
 
-| Capa | Herramienta | Función |
-|------|-------------|---------|
-| Aplicación | Python / Flask | API REST con endpoints `/` y `/health` |
-| Contenedorización | Docker | Imagen optimizada por capas con caché |
-| Registry | AWS ECR | Registry privado — tag por BUILD_NUMBER |
-| CI/CD | Jenkins on-premise | Pipeline declarativo, 7 stages |
-| IaC | Terraform 1.9 | VPC, EKS, IAM, KMS — backend S3 |
-| Config Management | Ansible + AWS SSM | Configuración de nodos sin SSH |
-| Orquestación | AWS EKS (K8s 1.35) | Cluster gestionado, multi-AZ |
-| Acceso cluster | IAM Role + STS | `sts:AssumeRole` — sesiones temporales |
-| Monitorización | CloudWatch + Grafana | Métricas, logs, Container Insights |
-| Auditoría | CloudTrail | Registro de todas las acciones AWS |
-| Seguridad nodos | firewalld + dnf-automatic | Hardening automático en cada deploy |
-| Control versiones | Git / GitHub | Branch protection + PR obligatorio |
+| Layer | Tool | Role |
+|---|---|---|
+| App | Python / Flask | API REST — `/` `/health` |
+| Container | Docker | Imagen optimizada por capas · tag `BUILD_NUMBER` |
+| Registry | AWS ECR | Registry privado — pull solo con IAM |
+| CI/CD | Jenkins on-premise | Pipeline declarativo — Jenkinsfile versionado |
+| IaC | Terraform 1.9 | VPC · EKS · IAM · KMS · backend S3 |
+| Config | Ansible + AWS SSM | Hardening y monitoring sin SSH |
+| Orchestration | AWS EKS 1.35 | Cluster gestionado · multi-AZ |
+| Access | IAM Role + STS | `sts:AssumeRole` — sesiones de 1h |
+| Observability | CloudWatch · Grafana | Container Insights · logs 90d |
+| Audit | CloudTrail | Cada acción AWS registrada con timestamp |
 
 ---
 
-## Estructura del proyecto
+## Pipeline
 
-```
-gitops-stack/
-├── app/                          # API Flask
-│   ├── app.py
-│   └── requirements.txt
-├── tests/
-│   └── test_app.py               # pytest — 2 tests, fail fast
-├── k8s/
-│   ├── deployment.yaml           # 2 réplicas, rolling update
-│   └── service.yaml              # NodePort
-├── terraform/
-│   ├── main.tf                   # VPC + EKS + IAM Role + Access Entries
-│   ├── variables.tf              # aws_account_id, eks_admin_user, región
-│   ├── outputs.tf                # cluster_endpoint, configure_kubectl
-│   └── users.tf                  # 5 grupos IAM + 22 usuarios como código
-├── ansible/
-│   ├── ansible.cfg               # remote_user: ssm-user, tmp: /tmp/.ansible
-│   ├── inventory.yml             # community.aws.aws_ssm
-│   ├── site.yml                  # 4 plays: common, security, monitoring, verify
-│   ├── group_vars/all.yml
-│   └── roles/
-│       ├── common/               # dnf update, paquetes, timezone, usuario deploy
-│       ├── security/             # firewalld, SSH hardening, dnf-automatic
-│       └── monitoring/           # CloudWatch agent, métricas cada 60s
-├── scripts/
-│   └── pre-destroy.sh            # Limpia LB de K8s antes del destroy
-├── .github/workflows/
-│   └── ci-cd.yml                 # GitHub Actions — tests en PRs
-├── Jenkinsfile                   # Pipeline producción — 7 stages
-└── Dockerfile                    # python:3.11-slim, capas optimizadas
-```
-
----
-
-## Pipeline CI/CD — 7 stages
-
-```
-Test → Build → Push ECR → Terraform → Ansible SSM → Kubernetes → ✅
-```
-
-| Stage | Qué hace | Si falla |
-|-------|----------|----------|
-| **Test** | `pytest tests/` — 2 tests | Pipeline se detiene |
-| **Build** | `docker build` con caché de capas | Pipeline se detiene |
-| **Push ECR** | Login + tag + push con BUILD_NUMBER | Pipeline se detiene |
+| Stage | Acción | Si falla |
+|---|---|---|
+| **Test** | `pytest tests/` — fail fast | Pipeline aborts |
+| **Build** | `docker build` con layer cache | Pipeline aborts |
+| **Push ECR** | Tag `:{BUILD_NUMBER}` + push | Pipeline aborts |
 | **Terraform** | `plan` → aprobación manual → `apply` | Requiere intervención |
-| **Ansible SSM** | Configura nodos via SSM sin SSH | Ignorado con `ignore_errors` |
-| **Kubernetes** | `sts:AssumeRole` → `kubectl apply` → rollout | Pipeline se detiene |
-
-> Nunca se despliega código roto. Ningún cambio de infraestructura sin aprobación humana.
+| **Ansible SSM** | common · security · monitoring | `ignore_errors` en telnet |
+| **Kubernetes** | `sts:AssumeRole` → `kubectl apply` → rollout | Pipeline aborts |
 
 ---
 
-## Acceso EKS — Patrón empresarial
+## IAM Pattern
 
-El cluster nunca se accede con usuarios IAM directamente. Todo pasa por un rol asumible.
+Ningún usuario tiene acceso directo al cluster. Todo pasa por `eks-admin-role`.
 
 ```
-liquenson-cli ──┐
-                ├──→ sts:AssumeRole ──→ eks-admin-role ──→ EKS
-Jenkins         ┘         (sesión temporal 1h)
+liquenson-cli  ─┐
+                ├─► sts:AssumeRole ─► eks-admin-role ─► EKS cluster
+Jenkins        ─┘   (1h TTL)          (Terraform managed)
 ```
-
-**Gestionado 100% por Terraform:**
 
 ```hcl
-resource "aws_iam_role" "eks_admin" {
-  name = "eks-admin-role"
-  # liquenson-cli y Jenkins pueden asumir este rol
-}
-
+# Access Entry apunta al ROL, nunca al usuario
 resource "aws_eks_access_entry" "admin" {
-  principal_arn = aws_iam_role.eks_admin.arn  # el ROL, no el usuario
-}
-
-resource "aws_eks_access_policy_association" "admin" {
-  policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = aws_iam_role.eks_admin.arn
+  type          = "STANDARD"
 }
 ```
 
-**Beneficios:** sesiones temporales con expiración automática, trazabilidad en CloudTrail por cada `jenkins-deploy-{BUILD_NUMBER}`, cero credenciales estáticas.
+CloudTrail audita cada `jenkins-deploy-{BUILD_NUMBER}` con rol, timestamp y región.
 
 ---
 
-## Gestión de identidades IAM
+## Infrastructure
 
-Todo gestionado como código en `terraform/users.tf`. Para añadir o eliminar usuarios: editar el archivo y abrir un Pull Request.
+```
+AWS eu-west-1
+├── VPC 10.0.0.0/16
+│   ├── private subnets  10.0.1.0/24 · 10.0.2.0/24  (workers — sin IP pública)
+│   └── public subnets   10.0.101.0/24 · 10.0.102.0/24  (load balancers)
+├── EKS  gitops-stack-prod  K8s 1.35
+│   └── Node Group  2× t3.small · SSM enabled · min 1 / max 3
+├── ECR  gitops-stack  (privado)
+├── IAM  eks-admin-role + 5 grupos + 22 usuarios (users.tf)
+├── KMS  alias/eks/gitops-stack-prod  (secrets cifrados)
+├── CloudWatch  Container Insights · log groups 90d
+└── S3  devops-lab-tfstate-538079272432  (Terraform backend)
+```
 
-| Grupo | Permisos | Miembros |
-|-------|----------|---------|
+IAM groups gestionados como código en `users.tf`:
+
+| Group | Policy | Members |
+|---|---|---|
 | `devops-team` | EKS + ECR + CloudWatch | dev-kevin, dev-wesley, dev-ruben, dev-pelegrino, dev-aisa, dev-ismael, dev-fermme |
-| `developers` | ECR PowerUser + CloudWatch Logs | dev-yolanda, dev-marcus, dev-elena, dev-william |
+| `developers` | ECR PowerUser + CW Logs | dev-yolanda, dev-marcus, dev-elena, dev-william |
 | `security-team` | IAM ReadOnly | sec-maria, sec-john, sec-anna |
 | `monitoring-team` | CloudWatch ReadOnly | ops-pedro, ops-sofia, ops-james |
 | `data-team` | S3 Full + RDS ReadOnly | data-luis, data-nina, data-alex |
 
 ---
 
-## Infraestructura AWS
+## Ansible via SSM
 
-| Recurso | Configuración |
-|---------|--------------|
-| VPC | `10.0.0.0/16` — eu-west-1 |
-| Subredes privadas | 2 AZs — nodos sin IP pública |
-| Subredes públicas | 2 AZs — load balancers |
-| NAT Gateway | Single NAT — salida internet para nodos |
-| EKS Cluster | K8s 1.35 — `gitops-stack-prod` |
-| Node Group | 2× t3.small, min 1 / max 3, SSM habilitado |
-| ECR | Registry privado `gitops-stack` |
-| IAM Role | `eks-admin-role` — asumible, mínimo privilegio |
-| KMS Key | Cifrado de secrets del cluster |
-| CloudWatch | Container Insights + log groups 90 días |
-| S3 Backend | `devops-lab-tfstate-538079272432` — estado compartido |
+Los nodos EKS corren Amazon Linux 2023 en subredes privadas. Ansible los configura sin SSH ni bastión usando `community.aws.aws_ssm` como connection plugin.
+
+| Role | Tasks |
+|---|---|
+| `common` | dnf update · paquetes base · timezone · usuario `deploy` · límites archivos |
+| `security` | SSH hardening · firewalld (HTTPS+SSH+6443) · `dnf-automatic` |
+| `monitoring` | CloudWatch agent · métricas 60s · `/var/log/messages` + `/var/log/secure` |
+
+> **Fix en producción:** `immediate: yes` en firewalld mantiene la sesión SSM activa durante el hardening. Sin esto el nodo pierde conexión al activar el firewall.
 
 ---
 
-## Compatibilidad Amazon Linux 2023
-
-Los nodos EKS corren AL2023. Diferencias clave respecto a versiones anteriores:
-
-| Componente | Amazon Linux 2 | Amazon Linux 2023 |
-|-----------|---------------|-------------------|
-| Firewall | UFW | **firewalld** |
-| Actualizaciones | unattended-upgrades | **dnf-automatic** |
-| Grupo sudo | sudo | **wheel** |
-| curl | curl | **curl-minimal** (no reemplazar) |
-| Usuario SSM | ec2-user | **ssm-user** |
-| tmp Ansible | `~/.ansible/tmp` | **`/tmp/.ansible/tmp`** |
-
----
-
-## Quickstart — Despliegue en producción
+## Quickstart
 
 ```bash
-# 1. Provisionar infraestructura completa
+# Infraestructura completa desde cero
 cd terraform
-terraform init && terraform apply
+terraform init
+terraform apply
 
-# 2. Conectar kubectl (el rol se asume automáticamente en el pipeline)
+# Conectar kubectl
 aws eks update-kubeconfig --region eu-west-1 --name gitops-stack-prod
 
-# 3. Verificar
-kubectl get nodes && kubectl get pods -A
+# Verificar
+kubectl get nodes
+kubectl get pods -A
 ```
 
-El IAM Role, EKS Access Entries y todos los usuarios IAM se crean automáticamente con el `terraform apply`. Sin pasos manuales adicionales.
-
-## Destroy seguro
-
 ```bash
-bash scripts/pre-destroy.sh          # elimina Load Balancer de K8s
+# Destroy seguro — elimina Load Balancers antes del destroy
+bash scripts/pre-destroy.sh
 cd terraform && terraform destroy -auto-approve
 ```
 
 ---
 
-## Flujo Git — Branch Protection
+## Git Workflow
 
 ```bash
 git checkout -b feat/mi-cambio
 git commit -m "feat: descripción"
 git push origin feat/mi-cambio
-# → Pull Request → merge → Jenkins lanza el pipeline automáticamente
+# → Pull Request → merge → Jenkins pipeline automático
 ```
 
-Push directo a `main` está bloqueado. Todo cambio pasa por revisión.
+`main` tiene branch protection activa. Push directo bloqueado.
 
 ---
 
-## Principios de diseño
+## Project Structure
 
-- **GitOps** — Git como única fuente de verdad para todo
-- **Infraestructura inmutable** — nueva imagen por commit, nunca modificación en caliente
-- **Acceso sin SSH** — Ansible via SSM, cero bastiones, cero claves SSH
-- **Roles asumibles** — acceso EKS siempre mediante IAM Role, nunca usuario directo
-- **Sesiones temporales** — credenciales con expiración automática vía STS
-- **Fail fast** — el pipeline se detiene ante cualquier fallo de tests
-- **Mínimo privilegio** — grupos y roles con permisos estrictamente necesarios
-- **Trazabilidad completa** — cada deploy vinculado a commit + build number + usuario
-- **Hardening automático** — Ansible aplica políticas de seguridad en cada nodo nuevo
-- **Alta disponibilidad** — multi-AZ, self-healing, rolling updates sin downtime
+```
+gitops-stack/
+├── app/                    # Flask API
+├── tests/                  # pytest
+├── k8s/                    # Deployment + Service manifests
+├── terraform/
+│   ├── main.tf             # VPC · EKS · IAM Role · Access Entries · KMS
+│   ├── users.tf            # 5 grupos + 22 usuarios IAM como código
+│   ├── variables.tf
+│   └── outputs.tf
+├── ansible/
+│   ├── roles/
+│   │   ├── common/
+│   │   ├── security/       # firewalld con immediate:yes para SSM
+│   │   └── monitoring/     # CloudWatch agent
+│   ├── site.yml
+│   └── inventory.yml       # community.aws.aws_ssm
+├── scripts/
+│   └── pre-destroy.sh
+├── Jenkinsfile             # 7-stage declarative pipeline
+└── Dockerfile              # python:3.11-slim · layer cache optimizado
+```
 
 ---
 
-## API Endpoints
+## Design Principles
 
-| Endpoint | Método | Respuesta |
-|----------|--------|-----------|
-| `/` | GET | `hostname`, `version`, `status` del pod |
-| `/health` | GET | Health check — liveness probe de Kubernetes |
+| Principio | Implementación |
+|---|---|
+| **GitOps** | Git es la única fuente de verdad — nada existe sin un commit |
+| **Immutable** | Nueva imagen por commit — nunca modificación en caliente |
+| **Zero-SSH** | Ansible via SSM — sin bastiones, sin claves SSH, sin IPs públicas |
+| **Least Privilege** | IAM con mínimo privilegio — roles, no usuarios directos |
+| **Fail Fast** | Pipeline se detiene ante cualquier fallo de tests |
+| **Auditability** | Cada deploy vinculado a commit + BUILD_NUMBER + usuario + timestamp |
 
 ---
 
-Desarrollado por [Liquenson](https://github.com/Liquenson) · Ingeniero DevOps · Las Palmas de Gran Canaria
-
-**Stack:** Python · Docker · Kubernetes · Jenkins · Terraform · Ansible · AWS SSM · AWS EKS · ECR · IAM · CloudWatch · CloudTrail
+Developed by [Liquenson](https://github.com/Liquenson) · [LRA Cloud Operations](https://www.lracloudops.com/) · Las Palmas de Gran Canaria
